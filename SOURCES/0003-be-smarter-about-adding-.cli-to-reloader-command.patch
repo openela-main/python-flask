@@ -1,0 +1,47 @@
+From 18c9db47940c1195809a0c82fcb85601c3f4df46 Mon Sep 17 00:00:00 2001
+From: David Lord <davidism@gmail.com>
+Date: Sun, 4 Jun 2017 12:26:21 -0700
+Subject: [PATCH 3/3] be smarter about adding ".cli" to reloader command python
+ -m flask.cli raises an import warning on > 2.6 it's only needed on 2.6,
+ "flask" works otherwise
+
+---
+ flask/cli.py | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/flask/cli.py b/flask/cli.py
+index 074ee768..ca455671 100644
+--- a/flask/cli.py
++++ b/flask/cli.py
+@@ -494,19 +494,19 @@ Example usage:
+ 
+ 
+ def main(as_module=False):
+-    this_module = __package__ + '.cli'
+     args = sys.argv[1:]
+ 
+     if as_module:
+-        if sys.version_info >= (2, 7):
+-            name = 'python -m ' + this_module.rsplit('.', 1)[0]
+-        else:
+-            name = 'python -m ' + this_module
++        this_module = 'flask'
++
++        if sys.version_info < (2, 7):
++            this_module += '.cli'
++
++        name = 'python -m ' + this_module
+ 
+-        # This module is always executed as "python -m flask.run" and as such
+-        # we need to ensure that we restore the actual command line so that
+-        # the reloader can properly operate.
+-        sys.argv = ['-m', this_module] + sys.argv[1:]
++        # Python rewrites "python -m flask" to the path to the file in argv.
++        # Restore the original command so that the reloader works.
++        sys.argv = ['-m', this_module] + args
+     else:
+         name = None
+ 
+-- 
+2.21.0
+

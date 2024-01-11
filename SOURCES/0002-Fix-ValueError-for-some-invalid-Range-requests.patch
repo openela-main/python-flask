@@ -1,0 +1,87 @@
+From c52e1b7388c17466a551391cdf81964bf0b7aef0 Mon Sep 17 00:00:00 2001
+From: ThiefMaster <adrian@planetcoding.net>
+Date: Thu, 23 Nov 2017 10:32:13 +0100
+Subject: [PATCH 2/3] Fix ValueError for some invalid Range requests
+
+fixes #2526
+---
+ CHANGES               |  8 ++++++++
+ flask/helpers.py      |  3 ++-
+ tests/test_helpers.py | 21 ++++++++++++++++++++-
+ 3 files changed, 30 insertions(+), 2 deletions(-)
+
+diff --git a/CHANGES b/CHANGES
+index 3456276a..b32b98cb 100644
+--- a/CHANGES
++++ b/CHANGES
+@@ -15,6 +15,14 @@ Major release, unreleased
+   method returns compressed response by default, and pretty response in
+   debug mode.
+ 
++Version 0.12.3
++--------------
++
++Bugfix release, unreleased
++
++- Fix a ValueError caused by invalid Range requests in some cases
++
++
+ Version 0.12.2
+ --------------
+ 
+diff --git a/flask/helpers.py b/flask/helpers.py
+index 4bb1d1c9..caaad9a3 100644
+--- a/flask/helpers.py
++++ b/flask/helpers.py
+@@ -591,7 +591,8 @@ def send_file(filename_or_fp, mimetype=None, as_attachment=False,
+                 rv = rv.make_conditional(request, accept_ranges=True,
+                                          complete_length=fsize)
+             except RequestedRangeNotSatisfiable:
+-                file.close()
++                if file is not None:
++                    file.close()
+                 raise
+         else:
+             rv = rv.make_conditional(request)
+diff --git a/tests/test_helpers.py b/tests/test_helpers.py
+index 9320ef71..69350751 100644
+--- a/tests/test_helpers.py
++++ b/tests/test_helpers.py
+@@ -468,7 +468,7 @@ class TestSendfile(object):
+ 
+     @pytest.mark.skipif(
+         not callable(getattr(Range, 'to_content_range_header', None)),
+-        reason="not implement within werkzeug"
++        reason="not implemented within werkzeug"
+     )
+     def test_send_file_range_request(self):
+         app = flask.Flask(__name__)
+@@ -529,6 +529,25 @@ class TestSendfile(object):
+         assert rv.status_code == 200
+         rv.close()
+ 
++    @pytest.mark.skipif(
++        not callable(getattr(Range, 'to_content_range_header', None)),
++        reason="not implemented within werkzeug"
++    )
++    def test_send_file_range_request_xsendfile_invalid(self):
++        # https://github.com/pallets/flask/issues/2526
++        app = flask.Flask(__name__)
++        app.use_x_sendfile = True
++
++        @app.route('/')
++        def index():
++            return flask.send_file('static/index.html', conditional=True)
++
++        c = app.test_client()
++
++        rv = c.get('/', headers={'Range': 'bytes=1000-'})
++        assert rv.status_code == 416
++        rv.close()
++
+     def test_attachment(self):
+         app = flask.Flask(__name__)
+         with app.test_request_context():
+-- 
+2.21.0
+
